@@ -24,6 +24,9 @@ h2{font-family:var(--display);font-size:24px;margin:0 0 4px}
 .choice.alt{background:var(--card);color:var(--fg)}
 .back{background:none;border:0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;padding:4px 0;align-self:flex-start}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+header{text-align:center}
+#submit{align-self:center;min-width:240px;justify-content:center;padding:16px 32px;font-size:18px;min-height:58px;border-radius:14px}
+.choice[data-home]{align-items:center}
 .list{display:flex;flex-direction:column;gap:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:start}
 .name{font-family:var(--display);font-weight:700;font-size:20px}
@@ -65,14 +68,14 @@ input,select{font:inherit;font-size:16px;color:var(--fg);background:var(--bg);bo
 </section>
 
 <section id="rides" hidden>
-<button class="back" data-home>&larr; Back</button>
+<button class="choice alt" data-home><b>&larr; Back</b></button>
 <h2>Need A Ride</h2>
 <p class="lede" style="margin-bottom:14px">Call or text a driver whose city and date fit. Work out the details with them.</p>
 <div class="list" id="list" aria-live="polite"></div>
 </section>
 
 <section id="drive" hidden>
-<button class="back" data-home>&larr; Back</button>
+<button class="choice alt" data-home><b>&larr; Back</b></button>
 <h2>Offering A Ride</h2>
 <p class="lede" style="margin-bottom:14px">Your name, city, date and phone number will be visible to everyone who opens this page.</p>
 <form id="form" novalidate>
