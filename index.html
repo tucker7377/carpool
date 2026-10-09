@@ -118,6 +118,10 @@ window.google={script:{run:{withSuccessHandler:function(ok){return{withFailureHa
 var CITIES=["Riverside","Corona","Moreno Valley","Jurupa Valley","Norco","Perris","Menifee","Murrieta","Temecula","Lake Elsinore","Redlands","Loma Linda","Colton","Rialto","San Bernardino","Fontana","Ontario","Rancho Cucamonga","Yucaipa","Beaumont","Banning","Other (type it)"];
 var $=function(i){return document.getElementById(i)};
 var views=["home","rides","drive","done"];
+function getMine(){try{return JSON.parse(localStorage.getItem("carpool-mine2")||"[]")}catch(e){return[]}}
+function addMine(m){try{var a=getMine();a.push(m);localStorage.setItem("carpool-mine2",JSON.stringify(a))}catch(e){}}
+function dropMine(id){try{localStorage.setItem("carpool-mine2",JSON.stringify(getMine().filter(function(x){return x.id!==id})))}catch(e){}}
+function removeMine(m){return run("removeDriver",m.id,m.token).then(function(){dropMine(m.id)})}
 function run(fn){var a=[].slice.call(arguments,1);return new Promise(function(ok,no){google.script.run.withSuccessHandler(ok).withFailureHandler(no)[fn].apply(null,a)})}
 function show(v){views.forEach(function(x){$(x).hidden=x!==v});window.scrollTo(0,0);if(v==="rides")loadList()}
 function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
@@ -139,7 +143,7 @@ $("form").onsubmit=function(e){
   .then(function(r){
     btn.disabled=false;btn.textContent="Add me to the board";
     if(!r.ok){$("err").textContent=r.error||"Something went wrong. Please try again.";return}
-    mine={id:r.id,token:r.token};
+    mine={id:r.id,token:r.token};if(r.id)addMine(mine);
     $("removeNote").hidden=true;$("removeMe").hidden=!r.id;
     $("form").reset();$("date").value=ymd(nx);$("otherWrap").hidden=true;show("done");
   }).catch(function(){btn.disabled=false;btn.textContent="Add me to the board";$("err").textContent="Could not reach the board. Check your connection and try again."});
@@ -147,6 +151,7 @@ $("form").onsubmit=function(e){
 $("removeMe").onclick=function(){
   if(!mine)return;
   run("removeDriver",mine.id,mine.token).then(function(r){
+    dropMine(mine.id);
     $("removeNote").hidden=false;$("removeNote").textContent=r.ok?"Your listing was removed.":"That listing was already removed.";$("removeMe").hidden=true;
   });
 };
@@ -157,6 +162,8 @@ function card(d){
   el.innerHTML='<div class="name">'+esc(d.name)+'</div><div class="when">'+esc(dt.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"}))+'</div>'
    +'<div class="from">Driving from '+esc(d.city)+'</div><div>'+(today?'<span class="today">Today</span>':'')+'</div>'
    +'<div class="contact"><span class="num">'+esc(d.phone)+'</span><span class="btns"><a class="btn" target="_top" href="tel:'+tel+'">Call</a><a class="btn ghost" target="_top" href="sms:'+tel+'">Text</a></span></div>';
+  var m=getMine().filter(function(x){return x.id===d.id})[0];
+  if(m){var rb=document.createElement("button");rb.className="btn ghost";rb.textContent="Remove mine";rb.onclick=function(){rb.disabled=true;removeMine(m).then(loadList)};el.querySelector(".btns").appendChild(rb)}
   return el;
 }
 function loadList(){
