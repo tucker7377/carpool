@@ -1,14 +1,12 @@
-// St. Andrew Carpool Board: tiny dependency-free server.
+// St. Andrew Carpool Board.
 // Run: node server.js   (PORT env var optional, default 8080)
-// Data lives in data.json next to this file.
+// Local data lives in data.json; Cloud Run uses Firestore.
 const http = require("http"), fs = require("fs"), path = require("path"), crypto = require("crypto");
 const PORT = process.env.PORT || 8080;
-const DATA = path.join(process.env.DATA_DIR || __dirname, "data.json"); // set DATA_DIR to a persistent disk/volume on a cloud host
+const storage = require("./storage").createStorage();
 const PUB = path.join(__dirname, "public");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
 
-const load = () => { try { return JSON.parse(fs.readFileSync(DATA, "utf8")); } catch { return []; } };
-const save = (d) => fs.writeFileSync(DATA + ".tmp", JSON.stringify(d, null, 2)) || fs.renameSync(DATA + ".tmp", DATA);
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" }).format(new Date()); // YYYY-MM-DD in Riverside time, whatever the server clock
 const clean = (s, n) => String(s || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, n);
 
@@ -25,7 +23,7 @@ http.createServer(async (req, res) => {
   try {
     if (url.pathname === "/api/drivers" && req.method === "GET") {
       const t = today();
-      const list = load().filter(d => d.date >= t).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.created - b.created)
+      const list = (await storage.list(t)).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.created - b.created)
         .map(({ id, name, city, date, phone }) => ({ id, name, city, date, phone }));
       return send(res, 200, list);
     }
@@ -43,17 +41,14 @@ http.createServer(async (req, res) => {
       if (!(digits.length === 10 || (digits.length === 11 && digits[0] === "1"))) return send(res, 400, { error: "Enter a 10-digit phone number." });
       const d10 = digits.slice(-10);
       const pretty = `(${d10.slice(0, 3)}) ${d10.slice(3, 6)}-${d10.slice(6)}`;
-      const all = load();
-      if (all.some(d => d.phone === pretty && d.date === date)) return send(res, 409, { error: "That phone number is already on the board for that date." });
       const rec = { id: crypto.randomBytes(6).toString("hex"), token: crypto.randomBytes(12).toString("hex"), name, city, date, phone: pretty, created: Date.now() };
-      all.push(rec); save(all);
+      if (!(await storage.add(rec))) return send(res, 409, { error: "That phone number is already on the board for that date." });
       return send(res, 201, { ok: true, id: rec.id, token: rec.token });
     }
     const m = url.pathname.match(/^\/api\/drivers\/([a-f0-9]+)$/);
     if (m && req.method === "DELETE") {
-      const all = load(), i = all.findIndex(d => d.id === m[1] && d.token === url.searchParams.get("token"));
-      if (i < 0) return send(res, 404, { error: "Not found." });
-      all.splice(i, 1); save(all); return send(res, 200, { ok: true });
+      if (!(await storage.remove(m[1], url.searchParams.get("token")))) return send(res, 404, { error: "Not found." });
+      return send(res, 200, { ok: true });
     }
     // static files
     let p = url.pathname === "/" ? "/index.html" : url.pathname;
@@ -62,5 +57,9 @@ http.createServer(async (req, res) => {
     if (!f.startsWith(PUB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end("Not found"); }
     res.writeHead(200, { "Content-Type": TYPES[path.extname(f)] || "application/octet-stream", "X-Robots-Tag": "noindex, nofollow" });
     fs.createReadStream(f).pipe(res);
-  } catch { send(res, 400, { error: "Bad request." }); }
-}).listen(PORT, () => console.log("Carpool board on http://localhost:" + PORT));
+  } catch (error) {
+    if (!error) return send(res, 400, { error: "Bad request." });
+    console.error("Request failed:", error.code || error.name);
+    send(res, 503, { error: "The board is temporarily unavailable. Please try again." });
+  }
+}).listen(PORT, function () { console.log("Carpool board on http://0.0.0.0:" + this.address().port); });
